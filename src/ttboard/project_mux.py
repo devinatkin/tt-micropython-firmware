@@ -39,7 +39,18 @@ class Design:
                 self.name = f'wokwi_{new_name}'
         
         self._all = info
-        
+    
+    def run_test(self):
+        if hasattr(self, 'test'):
+            log.info(f'Testing {self.name}')
+
+            self.mux.enable(self)
+            self.test()
+            
+            log.info(f'Test complete for {self.name}')
+        else:
+            log.info(f'No test method for {self.name}')
+
     def enable(self):
         self.mux.enable(self)
         
@@ -78,7 +89,14 @@ class DesignIndex:
         except OSError:
             log.error(f'Could not open shuttle index {src_JSON_file}')
              
-    
+    def test_all(self):
+        """
+        Go through all designs and run their tests,
+        The run_test method will check if the given design has a test method and log if not
+        """
+        for des in self.all:
+            des.run_test()
+
     @property
     def count(self):
         return self._project_count
