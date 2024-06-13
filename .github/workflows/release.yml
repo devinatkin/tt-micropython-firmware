@@ -2,8 +2,6 @@ name: UF2 Generate and Release
 on:
   workflow_dispatch:
   push:
-    tags:
-      - '*'
 jobs:
   create-release:
     # ubuntu
@@ -37,12 +35,19 @@ jobs:
            pip install uf2utils
            touch $GITHUB_WORKSPACE/sdk/src/release_${{  github.ref_name }}
            python -m uf2utils.examples.custom_pico --fs_root $GITHUB_WORKSPACE/sdk/src --upython /tmp/rp2-pico.uf2 --out /tmp/tt-demo-rp2040-${{  github.ref_name }}.uf2
+  
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: UF2 Artifact
+        path: /tmp/*.uf2
+      if: (!contains(github.ref, 'refs/tags/'))
+
     - name: Upload Release
       uses: ncipollo/release-action@v1
       with:
           artifacts: "/tmp/tt-demo-rp2040-${{  github.ref_name }}.uf2"
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
-    
-    
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     
