@@ -2,8 +2,49 @@ name: UF2 Generate and Release
 on:
   workflow_dispatch:
   push:
+env:
+  TT_RUNS_SUPPORTED: "tt04"
 jobs:
+  generate-config:
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout repo
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+
+    - name: Install Requirements
+      run: |
+        pip install -r scripts/requirements.txt
+
+    - name: Download the chip configs and generate the config
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/sdk/src/shuttles
+        file_names=()
+        for chip in $TT_RUNS_SUPPORTED; do 
+          file_name="$GITHUB_WORKSPACE/sdk/src/shuttles/$chip.json"
+          wget -O $file_name "https://index.tinytapeout.com/$chip.json?fields=repo,address,commit,clock_hz,title"
+          file_names+=($file_name)
+        done
+        python scripts/generate_config.py "${file_names[@]}"
+
+    - name: Upload the Generated Config Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Generated_Config_Artifact
+        path: scripts/config.ini
+    
+ 
   create-release:
+    needs: generate-config
     # ubuntu
     env:
       RPOS_UF2FILE: RPI_PICO-20240222-v1.22.2.uf2
@@ -16,6 +57,11 @@ jobs:
       with:
         submodules: recursive
         path: sdk
+    - name: Grab the generated config
+      uses: actions/download-artifact@v4
+      with:
+        name: Generated_Config_Artifact
+        path: src/config.ini
     # get the RPI UF2
     - name: get the os
       run: wget -O /tmp/rp2-pico.uf2 "https://micropython.org/resources/firmware/$RPOS_UF2FILE"
@@ -40,7 +86,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: UF2 Artifact
-        path: /tmp/*.uf2
+        path: /tmp/tt-demo-rp2040*.uf2
       if: (!contains(github.ref, 'refs/tags/'))
 
     - name: Upload Release
