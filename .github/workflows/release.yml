@@ -65,25 +65,33 @@ jobs:
       with:
         submodules: recursive
         path: sdk
+
+    - name: Delete the example config
+      run: rm -f sdk/src/config.ini
+
     - name: Grab the generated config
       uses: actions/download-artifact@v4
       with:
         name: Generated_Config_Artifact
-        path: sdk/src/config.ini
+        path: sdk/src
+
     - name: Grab the test code artifact
       uses: actions/download-artifact@v4
       with:
         name: Compiled_Test_Artifact
         path: sdk/src
+
     # get the RPI UF2
     - name: get the os
       run: wget -O /tmp/rp2-pico.uf2 "https://micropython.org/resources/firmware/$RPOS_UF2FILE"
+
     # get python setup
     - name: build the merged UF2
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
         cache: 'pip'
+
     # build it
     - name: get the os
       run: |
