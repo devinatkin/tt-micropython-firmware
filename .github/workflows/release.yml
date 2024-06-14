@@ -41,6 +41,14 @@ jobs:
       with:
         name: Generated_Config_Artifact
         path: scripts/config.ini
+        retention-days: 1
+
+    - name: Upload the Compiled Test Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Compiled_Test_Artifact
+        path: scripts/tests/*
+        retention-days: 1
     
  
   create-release:
@@ -61,7 +69,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: Generated_Config_Artifact
-        path: src/config.ini
+        path: sdk/src/config.ini
+    - name: Grab the test code artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: Compiled_Test_Artifact
+        path: sdk/src
     # get the RPI UF2
     - name: get the os
       run: wget -O /tmp/rp2-pico.uf2 "https://micropython.org/resources/firmware/$RPOS_UF2FILE"
@@ -82,7 +95,7 @@ jobs:
            touch $GITHUB_WORKSPACE/sdk/src/release_${{  github.ref_name }}
            python -m uf2utils.examples.custom_pico --fs_root $GITHUB_WORKSPACE/sdk/src --upython /tmp/rp2-pico.uf2 --out /tmp/tt-demo-rp2040-${{  github.ref_name }}.uf2
   
-    - name: Upload Artifact
+    - name: Upload UF2 Artifact
       uses: actions/upload-artifact@v4
       with:
         name: UF2 Artifact
