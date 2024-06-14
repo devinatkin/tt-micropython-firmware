@@ -6,7 +6,8 @@ Created on Jan 9, 2024
 '''
 
 import json
-import re 
+from re import compile as re_compile
+from os import stat, listdir
 import ttboard.util.time as time
 from ttboard.pins import Pins
 from ttboard.boot.rom import ChipROM
@@ -21,8 +22,8 @@ https://index.tinytapeout.com/tt04.json?fields=repo,address,commit,clock_hz,titl
 
 '''
 class Design:
-    BadCharsRe = re.compile(r'[^\w\d\s]+')
-    SpaceCharsRe = re.compile(r'\s+')
+    BadCharsRe = re_compile(r'[^\w\d\s]+')
+    SpaceCharsRe = re_compile(r'\s+')
     def __init__(self, projectMux, projindex:int, info:dict):
         self.mux = projectMux
         self.project_index = projindex
@@ -39,17 +40,35 @@ class Design:
                 self.name = f'wokwi_{new_name}'
         
         self._all = info
-    
-    def run_test(self):
-        if hasattr(self, 'test'):
-            log.info(f'Testing {self.name}')
 
-            self.mux.enable(self)
-            self.test()
-            
-            log.info(f'Test complete for {self.name}')
-        else:
-            log.info(f'No test method for {self.name}')
+        repo_parts = self.repo.split('/')
+
+        self.repo_name = str(repo_parts[-1])
+        self.repo_user = str(repo_parts[-2])
+
+        
+    def run_test(self):
+            try:
+                log.info(f'Attempting to Test: {self.name}')
+                self.enable()
+                # test_folder = f'/{self.repo_user}_{self.repo_name}'
+                
+                # # Get the files in the test folder
+                # # Run each file consecutively
+                test_files = listdir(f'/{self.repo_user}_{self.repo_name}')
+                for test_file in test_files:
+                    log.info(f'Running test file {test_file}')
+
+                    with open(f'/{self.repo_user}_{self.repo_name}/{test_file}') as fh:
+                        try:
+                            exec(fh.read())
+                        except:
+                            log.info(f'Error running test file {test_file}')
+
+                log.info(f'Test complete for: {self.name}\n')
+            except:
+                log.info(f'Was Unable to Test: {self.name}')
+
 
     def enable(self):
         self.mux.enable(self)
