@@ -163,3 +163,4 @@ cython_debug/
 tt03p5.json
 tt04.json
 scripts/config.ini
+scripts/tests/*

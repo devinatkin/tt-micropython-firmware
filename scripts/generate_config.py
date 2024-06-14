@@ -22,6 +22,10 @@ def main():
     starting_config = os.path.join(scripts_dir,"config_default.ini")
     modified_config = os.path.join(scripts_dir,"config.ini")
     
+    tests_dir = os.path.join(scripts_dir, 'tests')
+    if not os.path.exists(tests_dir):
+        os.makedirs(tests_dir)
+
     # Create a copy of the starting config file
     shutil.copy(starting_config, modified_config)
 
@@ -59,6 +63,15 @@ def main():
                                     content = file_content.decoded_content.decode('utf-8')
                                     config_file.write(content)
                                     config_file.flush()
+                                
+                                # All other files are tests
+                                else:
+                                    proj_tests_dir = os.path.join(tests_dir, f'{userName}_{repoName}')
+                                    if not os.path.exists(proj_tests_dir):
+                                        os.makedirs(proj_tests_dir)
+                                    with open(os.path.join(proj_tests_dir, file_content.name), 'wb') as f:
+                                        f.write(file_content.decoded_content)
+
                     except:
                         print(f"No Test found for {userName}/{repoName}")
 
