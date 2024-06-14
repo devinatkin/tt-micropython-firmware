@@ -58,7 +58,7 @@ class ChipROM(ShuttleProperties):
         self.project_mux.reset_and_clock_mux(0)
         
         self._contents = {
-                'shuttle': 'tt03p5',
+                'shuttle': 'tt04',
                 'repo': '',
                 'commit': ''
         }
