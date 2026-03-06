@@ -6,6 +6,7 @@ jobs:
   generate-config:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TT_RUNS_SUPPORTED: "unknown tt04 tt05 tt06 tt07 tt08"
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
