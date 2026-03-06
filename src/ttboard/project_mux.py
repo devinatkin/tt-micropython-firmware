@@ -31,24 +31,7 @@ Fetched with
 https://index.tinytapeout.com/tt0X.json?fields=address,clock_hz,title,dange_field
 
 '''
-class Design:
-    BadCharsRe = re_compile(r'[^\w\d\s]+')
-    SpaceCharsRe = re_compile(r'\s+')
-    def __init__(self, projectMux, projindex:int, info:dict):
-        self.mux = projectMux
-        self.project_index = projindex
-        self.count = int(projindex)
-        self.macro = info['macro']
-        self.name = info['macro']
-        self.repo = info['repo']
-        self.commit = info['commit']
-        self.clock_hz = info['clock_hz']
-        # special cleanup for wokwi gen'ed names
-        if self.name.startswith('tt_um_wokwi') and 'title' in info and len(info['title']):
-            new_name = self.SpaceCharsRe.sub('_', self.BadCharsRe.sub('', info['title'])).lower()
-            if len(new_name):
-                self.name = f'wokwi_{new_name}'
-   
+
 class DesignIndex(Serializable):
     SerializedBinSuffix = 'bin'
     BadCharsRe = re.compile(r'[^\w\d\s]+')
