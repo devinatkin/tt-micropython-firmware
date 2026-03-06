@@ -7,9 +7,10 @@ Created on Apr 26, 2024
 
 import ttboard.util.time as time
 from ttboard.boot.shuttle_properties import ShuttleProperties
+from ttboard.boot.demoboard_detect import DemoboardDetect, DemoboardCarrier
 
 
-import ttboard.logging as logging
+import ttboard.log as logging
 log = logging.getLogger(__name__)
 
 class ChipROM(ShuttleProperties):
@@ -18,12 +19,13 @@ class ChipROM(ShuttleProperties):
         self.project_mux = project_mux 
         self._contents = None 
         self._pins = project_mux.pins
+        self._rom_data = None
     
     
     def _send_and_rcv(self, send:int):
-        self._pins.input_byte = send 
+        self._pins.ui_in.value = send 
         time.sleep_ms(1)
-        return self._pins.output_byte
+        return  self._pins.uo_out.value
         
     @property
     def shuttle(self):
@@ -54,14 +56,24 @@ class ChipROM(ShuttleProperties):
         if self._contents is not None:
             return self._contents 
         
-        # select project 0
-        self.project_mux.reset_and_clock_mux(0)
-        
         self._contents = {
-                'shuttle': 'tt04',
+                'shuttle': 'unknown',
                 'repo': '',
                 'commit': ''
         }
+        if not DemoboardDetect.CarrierPresent:
+            log.warn("No carrier present, skipping chiprom")
+            return self._contents
+        
+        if DemoboardDetect.CarrierVersion != DemoboardCarrier.TT_CARRIER:
+            if DemoboardDetect.CarrierVersion == DemoboardCarrier.FPGA:
+                self._contents['shuttle'] = 'FPGA'
+            
+            return self._contents
+        
+        # select project 0
+        self.project_mux.reset_and_clock_mux(0)
+        
         
         # list of expected outputs as
         # (SEND, RCV)
@@ -71,7 +83,7 @@ class ChipROM(ShuttleProperties):
             magic = self._send_and_rcv(magic_pairs[0])
             if magic != magic_pairs[1]:
                 log.warn(f"No chip rom here? Got 'magic' {hex(magic)} @ {magic_pairs[0]}")
-                log.info('Fake reporting at tt03p5 chip')
+                log.info('Fake reporting at tt04 chip')
                 self.project_mux.disable()
                 return self._contents
         
@@ -81,13 +93,12 @@ class ChipROM(ShuttleProperties):
             if byte == 0:
                 break
             rom_data += chr(byte)
-        
-        log.info(f'Got ROM data {rom_data}')
+        self._rom_data = rom_data
 
-        self._contents = {'shuttle':'tt04', 'commit':'FAKEDATA'}
         if not len(rom_data):
             log.warn("ROM data empty")
         else:
+            log.info(f'Got ROM data\n{rom_data}')
             for l in rom_data.splitlines():
                 try:
                     k,v = l.split('=')
@@ -95,7 +106,7 @@ class ChipROM(ShuttleProperties):
                 except:
                     log.warn(f"Issue splitting {l}")
                     pass 
-        log.debug(f"GOT ROM: {self._contents}")
+        log.debug(f"Parsed ROM contents: {self._contents}")
         self.project_mux.disable()
         return self._contents
         

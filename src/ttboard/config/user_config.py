@@ -4,12 +4,13 @@ Created on Jan 22, 2024
 @author: Pat Deegan
 @copyright: Copyright (C) 2024 Pat Deegan, https://psychogenic.com
 '''
+import gc
 from ttboard.config.parser import ConfigParser
 from ttboard.mode import RPMode
-from ttboard.config.config_file import ConfigFile
 
-import ttboard.logging as logging
+import ttboard.log as logging
 log = logging.getLogger(__name__)
+
 
 class UserProjectConfig:
     '''
@@ -20,15 +21,15 @@ class UserProjectConfig:
             # set clock to 4kHz
             clock_frequency = 4000
             # clock config 4k, disp single bits
-            input_byte = 0b11001000
+            ui_in = 0b11001000
             mode = ASIC_RP_CONTROL
         
         You can use this to set:
             - mode (str)
             - start_in_reset (bool)
-            - input_byte (int)
-            - bidir_direction (int)
-            - bidir_byte (int)
+            - ui_in (int)
+            - uio_oe_pico (int)
+            - uio_in (int)
             - clock_frequency (int) project clock
             - rp_clock_frequency (int) RP2040 system clock frequency
             
@@ -38,36 +39,35 @@ class UserProjectConfig:
         see more info.
 
     '''
-    def __init__(self, section:str, conf:ConfigParser):
-        self.section = section 
-        self._config = conf 
-        
-    @property
-    def config(self):
-        return self._config
+    opts = ['mode', 'start_in_reset', 'ui_in',
+                         'uio_oe_pico',
+                         'uio_in',
+                         'clock_frequency',
+                         'rp_clock_frequency']
     
-
+    
+    def __init__(self, section:str, conf:ConfigParser):
+        self.name = section
+        for opt in self.opts:
+            val = None
+            if conf.has_option(section, opt):
+                val = conf.get(section, opt)
+            
+            setattr(self, opt, val)
+            
     
     def has(self, name:str):
-        return  self.config.has_option(self.section, name)
+        return self.get(name) is not None
     
     def get(self, name:str):
-        if not self.has(name):
+        if not hasattr(self, name):
             return None 
-        return self.config.get(self.section, name)
-    
-
-    def __getattr__(self, name):
-        return self.get(name)
+        
+        return getattr(self, name)
     
     def _properties_dict(self, include_unset:bool=False):
         ret = dict()
-        known_attribs = ['mode', 'start_in_reset', 'input_byte',
-                         'bidir_direction',
-                         'bidir_byte',
-                         'clock_frequency',
-                         'rp_clock_frequency'
-                         ]
+        known_attribs = self.opts
         for atr in known_attribs:
             v = self.get(atr)
             if v is not None or include_unset:
@@ -77,7 +77,7 @@ class UserProjectConfig:
 
     def __repr__(self):
         props = self._properties_dict(True)
-        return f'<UserProjectConfig {self.section}, {props["clock_frequency"]}Hz, mode: {props["mode"]}>'
+        return f'<UserProjectConfig {self.name}, {props["clock_frequency"]}Hz, mode: {props["mode"]}>'
     
     def __str__(self):
         property_strs = []
@@ -86,9 +86,9 @@ class UserProjectConfig:
             property_strs.append(f'  {k}: {pdict[k]}')
         
         properties = '\n'.join(property_strs)
-        return f'{self.section}\n{properties}'
+        return f'{self.name}\n{properties}'
 
-class UserConfig(ConfigFile):
+class UserConfig:
     '''
         Encapsulates the configuration for defaults and all the projects, in sections.
         The DEFAULT section holds system wide defaults and the default project to load
@@ -126,18 +126,50 @@ class UserConfig(ConfigFile):
             force_shuttle = tt04
             
             
+            # force_demoboard
+            # System does its best to determine the version of demoboard 
+            # its running on.  Override this with 
+            # force_demoboard = tt0*
+            force_demoboard = tt06
+            
+            
         Each project section is named [SHUTTLE_PROJECT_NAME]
         and will be an instance of, and described by, UserProjectConfig
     '''
     
     def __init__(self, ini_filepath:str='config.ini'):
-        super().__init__(ini_filepath)
+        self.inifile_path = ini_filepath 
+        conf = ConfigParser()
+        conf.read(ini_filepath)
+        self._proj_configs = dict()
+        for section in conf.sections():
+            if section == 'DEFAULT':
+                continue 
+            self._proj_configs[section] = None # UserProjectConfig(section, conf)
+            
+            
+        def_opts = ['mode', 'project', 'start_in_reset', 'log_level',
+                    'rp_clock_frequency', 'force_shuttle', 'force_demoboard']
+        for opt in def_opts:
+            val = None
+            if conf.has_option('DEFAULT', opt):
+                val = conf.get('DEFAULT', opt)
+            setattr(self, f'_{opt}', val)
+            
+            
+        conf = None 
+        gc.collect()
+    
+    
         
     def _get_default_option(self, name:str, def_value=None):
-        if not self.has_option('DEFAULT', name):
+        v = getattr(self, f'_{name}')
+        if v is None:
             return def_value 
-        return self.get('DEFAULT', name)
-    
+        return v
+    @property 
+    def filepath(self):
+        return self.inifile_path
     @property 
     def default_mode(self):
         mode_str = self._get_default_option('mode')
@@ -163,8 +195,35 @@ class UserConfig(ConfigFile):
         return self._get_default_option('force_shuttle')
         
     
+    @property 
+    def force_demoboard(self):
+        return self._get_default_option('force_demoboard')
+    
+    
+    @classmethod 
+    def string_to_loglevel(cls, loglevname:str):
+        conv_map = {
+                'debug': logging.DEBUG,
+                'info': logging.INFO,
+                'warn': logging.WARN,
+                'warning': logging.WARN,
+                'error': logging.ERROR
+            }
+        
+        if loglevname.lower() in conv_map:
+            return conv_map[loglevname.lower()]
+        
+        return None
+    
+    
+    
+    @property 
+    def log_level(self):
+        lev_str = self._get_default_option('log_level', 'INFO')
+        return self.string_to_loglevel(lev_str)
+        
     def has_project(self, name:str):
-        if self.has_section(name):
+        if name in self._proj_configs:
             return True 
         return False 
     
@@ -172,14 +231,25 @@ class UserConfig(ConfigFile):
         if not self.has_project(name):
             return None 
         
-        return UserProjectConfig(name, self.ini_file)
+        if self._proj_configs[name] is None:
+            conf = ConfigParser()
+            conf.read(self.inifile_path)
+            self._proj_configs[name] = UserProjectConfig(name, conf)
+            conf = None 
+            gc.collect()
+        return self._proj_configs[name]
     
     def __getattr__(self, name):
-        if name in self.sections:
+        if self.has_project(name):
             return self.project(name)
+    
+    @property 
+    def sections(self):
+        return list(self._proj_configs.keys())
     
     def __dir__(self):
         return self.sections
+    
     def __repr__(self):
         return f'<UserConfig {self.filepath}, default project: {self.default_project}>'
     

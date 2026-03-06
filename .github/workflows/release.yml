@@ -2,8 +2,6 @@ name: UF2 Generate and Release
 on:
   workflow_dispatch:
   push:
-env:
-  TT_RUNS_SUPPORTED: "tt04"
 jobs:
   generate-config:
     env:
@@ -55,11 +53,11 @@ jobs:
     needs: generate-config
     # ubuntu
     env:
-      RPOS_UF2FILE: RPI_PICO-20240222-v1.22.2.uf2
-      TT_RUNS_SUPPORTED: "tt03p5 tt04 tt05"
-    runs-on: ubuntu-latest
+      RPOS_UF2FILE: RPI_PICO-20241025-v1.24.0.uf2
+      TT_RUNS_SUPPORTED: "unknown tt04 tt05 tt06 tt07 tt08"
+    runs-on: ubuntu-24.04
     steps:
-    # need the repo checked out
+
     - name: checkout repo
       uses: actions/checkout@v4
       with:
@@ -84,37 +82,81 @@ jobs:
     # get the RPI UF2
     - name: get the os
       run: wget -O /tmp/rp2-pico.uf2 "https://micropython.org/resources/firmware/$RPOS_UF2FILE"
-
-    # get python setup
-    - name: build the merged UF2
+    
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
         cache: 'pip'
 
+    - name: Move ucocotb
+      run: |
+           cp -r $GITHUB_WORKSPACE/sdk/microcotb/src/microcotb $GITHUB_WORKSPACE/sdk/src
+    
+    - name: Get shuttle indices
+
     # build it
     - name: get the os
       run: |
            mkdir $GITHUB_WORKSPACE/sdk/src/shuttles
-           for chip in $TT_RUNS_SUPPORTED; do wget -O $GITHUB_WORKSPACE/sdk/src/shuttles/$chip.json "https://index.tinytapeout.com/$chip.json?fields=repo,address,commit,clock_hz,title"; done
-    # build it
-    - run: |
+           for chip in $TT_RUNS_SUPPORTED; do wget -O $GITHUB_WORKSPACE/sdk/src/shuttles/$chip.json "https://index.tinytapeout.com/$chip.json?fields=repo,address,commit,clock_hz,title,danger_level"; done
+    - name: Prepare shuttle bin files
+      run: |
+           cp -R $GITHUB_WORKSPACE/sdk/src $GITHUB_WORKSPACE/sdk/convwork
+           RUNPATH="$GITHUB_WORKSPACE/sdk/convwork:$PYTHONPATH"
+           echo "Path is $RUNPATH"
+           for chip in $TT_RUNS_SUPPORTED; do PYTHONPATH=$RUNPATH python3 $GITHUB_WORKSPACE/sdk/bin/serialize_shuttle.py $GITHUB_WORKSPACE/sdk/src/shuttles/$chip.json; done
+    
+    - name: Run PyTests
+      run: |
+           pip install pytest
+           RUNPATH="$GITHUB_WORKSPACE/sdk/convwork:$PYTHONPATH"
+           cd $GITHUB_WORKSPACE/sdk/test
+           for chip in $TT_RUNS_SUPPORTED; do PYTHONPATH=$RUNPATH pytest --shuttle $chip --shuttlepath $GITHUB_WORKSPACE/sdk/src/shuttles test_serialized_shuttle.py; done
+
+    - name: Build the final UF2
+      run: |
            pip install uf2utils
            touch $GITHUB_WORKSPACE/sdk/src/release_${{  github.ref_name }}
            python -m uf2utils.examples.custom_pico --fs_root $GITHUB_WORKSPACE/sdk/src --upython /tmp/rp2-pico.uf2 --out /tmp/tt-demo-rp2040-${{  github.ref_name }}.uf2
-  
-    - name: Upload UF2 Artifact
+    
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: UF2 Artifact
-        path: /tmp/tt-demo-rp2040*.uf2
-      if: (!contains(github.ref, 'refs/tags/'))
-
+        name: tt-demo-board-firmware
+        path: /tmp/tt-demo-rp2040-${{  github.ref_name }}.uf2
+    
     - name: Upload Release
       uses: ncipollo/release-action@v1
+      if: startsWith(github.ref, 'refs/tags/')
       with:
           artifacts: "/tmp/tt-demo-rp2040-${{  github.ref_name }}.uf2"
           token: ${{ secrets.GITHUB_TOKEN }}
           generateReleaseNotes: true
-      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    
+
+  simulate:
+    runs-on: ubuntu-24.04
+    needs: create-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download UF2
+        uses: actions/download-artifact@v4
+        with:
+          name: tt-demo-board-firmware
+          path: /tmp
+
+      - name: Copy UF2 to workspace
+        run: |
+          cp /tmp/tt-demo-rp2040-${{  github.ref_name }}.uf2 $GITHUB_WORKSPACE/release.uf2
+
+      - name: Run a Wokwi CI server
+        uses: wokwi/wokwi-ci-server-action@v1
+
+      - name: Test with Wokwi
+        uses: wokwi/wokwi-ci-action@v1
+        with:
+          token: ${{ secrets.WOKWI_CLI_TOKEN }}
+          path: /
+          expect_text: 'boot done:'

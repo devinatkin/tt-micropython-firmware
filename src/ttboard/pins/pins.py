@@ -16,11 +16,11 @@ TLDR
   p = Pins(RPMode.ASIC_RP_CONTROL) # monitor/control ASIC
   
   2) play with pins
-  print(p.out2()) # read
-  p.in3(1) # set
-  p.input_byte = 0x42 # set all INn 
-  p.uio1.mode = Pins.OUT # set mode
-  p.uio1(1) # set output
+  print(p.pins.uo_out2()) # read
+  p.ui_in[3] = 1 # set
+  p.ui_in.value = 0x42 # set all INn 
+  p.pins.uio_in1.mode = Pins.OUT # set mode
+  p.uio_in[1] = 1 # set output
   
   
 
@@ -32,14 +32,16 @@ from ttboard.mode import RPMode, RPModeDEVELOPMENT
 
 import ttboard.util.platform as platform
 from ttboard.pins.upython import Pin
-from ttboard.pins.gpio_map import GPIOMap
+import ttboard.pins.gpio_map as gp
 from ttboard.pins.standard import StandardPin
 from ttboard.pins.muxed import MuxedPin, MuxedPinInfo
 from ttboard.pins.mux_control import MuxControl
 
+from ttboard.ports.io import IO as VerilogIOPort
+from ttboard.ports.oe import OutputEnable as VerilogOEPort
 
 
-import ttboard.logging as logging
+import ttboard.log as logging
 log = logging.getLogger(__name__)
 
 
@@ -59,12 +61,12 @@ class Pins:
         a parameter is a write.  E.g.
         
             bp = Pins(...)
-            bp.out1() # reads the value
-            bp.in3(1) # sets the value
+            bp.pins.uo_out1() # reads the value
+            bp.ui_in[3] = 1 # sets the value
             # can also use normal machine.Pin functions like
-            bp.in3.off()
+            bp.pins.ui_in3.off()
             # or
-            bp.in3.irq(...)    
+            bp.pins.ui_in3.irq(...)    
         
         Though you shouldn't need it (the pin objects support everything 
         machine.Pin does), if you want low-level access to the 
@@ -89,9 +91,9 @@ class Pins:
         Finally, the _byte properties allow you to read or set the entire 
         port as a byte
         
-            print(bp.output_byte)
+            print(bp.uo_out.value)
             # or set
-            bp.input_byte = 0xAA
+            bp.ui_in.value = 0xAA
         
         # Pin DIRECTION
         So, from the RP2040's perspective, is out2 configured to read (an 
@@ -134,15 +136,42 @@ class Pins:
     def __init__(self, mode:int=RPMode.SAFE):
         self.dieOnInputControlSwitchHigh = True
         self._mode = None
-        self.muxCtrl = MuxControl(self.muxName, GPIOMap.HK_CSB, Pin.OUT)
-        # special case: give access to mux control/HK nCS pin
-        self.hk_csb = self.muxCtrl.ctrlpin
-        self.pin_hk_csb = self.muxCtrl.ctrlpin.raw_pin 
+        self._allpins = {}
+        if gp.GPIOMap.demoboard_uses_mux():
+            self.muxCtrl = MuxControl(self.muxName, gp.GPIOMap.mux_select(), Pin.OUT)
+            # special case: give access to mux control/HK nCS pin
+            self.hk_csb = self.muxCtrl.ctrlpin
+            self.pin_hk_csb = self.muxCtrl.ctrlpin.raw_pin 
+            self._allpins['hk_csb'] = self.hk_csb
         
-        self._allpins = {'hk_csb': self.hk_csb}
-        
+        self._init_ioports()
         self.mode = mode 
         
+        
+    
+    def _init_ioports(self):
+        # Note: these are named according the the ASICs point of view
+        # we can write ui_in, we read uo_out
+        port_defs = [
+            ('uo_out',  8, platform.read_uo_out_byte, None),
+            ('ui_in',   8, platform.read_ui_in_byte, platform.write_ui_in_byte),
+            ('uio_in',  8, platform.read_uio_byte, platform.write_uio_byte),
+            ('uio_out', 8, platform.read_uio_byte, None)
+            ]
+        self._ports = dict()
+        for pd in port_defs:
+            setattr(self, pd[0], VerilogIOPort(*pd))
+            
+            
+        self.uio_oe_pico = VerilogOEPort('uio_oe_pico', 8, 
+                                         platform.read_uio_outputenable, 
+                                         platform.write_uio_outputenable)
+        
+        
+    
+    @property 
+    def demoboard_uses_mux(self):
+        return gp.GPIOMap.demoboard_uses_mux()
     
     @property 
     def all(self):
@@ -154,7 +183,7 @@ class Pins:
         return self._mode 
     
     @mode.setter
-    def mode(self, setTo:int):
+    def mode(self, set_mode:int):
         startupMap = {
             RPModeDEVELOPMENT.STANDALONE: self.begin_standalone,
             RPMode.ASIC_RP_CONTROL: self.begin_asiconboard,
@@ -162,127 +191,32 @@ class Pins:
             RPMode.SAFE: self.begin_safe
         }
         
-        if setTo not in startupMap:
-            setTo = RPMode.SAFE 
+        if set_mode not in startupMap:
+            set_mode = RPMode.SAFE 
         
-        self._mode = setTo
-        log.info(f'Setting mode to {RPMode.to_string(setTo)}')
-        beginFunc = startupMap[setTo]
+        self._mode = set_mode
+        log.info(f'Setting mode to {RPMode.to_string(set_mode)}')
+        beginFunc = startupMap[set_mode]
         beginFunc()
-        
-    def _setmode_on_pins(self, pinslist:list, modelist:list):
-        max_idx = len(pinslist)
-        if len(modelist) < max_idx:
-            max_idx = len(modelist)
-            
-        for i in range(max_idx):
-            p = pinslist[i]
-            p.mode = modelist[i]
-            
-    def _getmode_for_pins(self, pinslist:list):
-        return list(map(lambda x: x.mode, pinslist))
-            
-    @property 
-    def outputs(self):
-        return self.list_port('out')
-    
-    @property 
-    def output_pins(self):
-        return self.list_port('pin_out')
-    
-    @property 
-    def output_byte(self):
-        if platform.IsRP2040:
-            return platform.read_output_byte()
-        return self._read_byte(self.outputs)
-    
-    @output_byte.setter 
-    def output_byte(self, val:int):
-        if platform.IsRP2040:
-            platform.write_output_byte(val)
+        if set_mode == RPMode.ASIC_RP_CONTROL:
+            self.ui_in.byte_write = platform.write_ui_in_byte
+            self.uio_in.byte_write = platform.write_uio_byte
         else:
-            self._write_byte(self.outputs, val)
+            self.ui_in.byte_write = None 
+            self.uio_in.byte_write = None
+            
         
-    @property 
-    def output_mode(self):
-        return self._getmode_for_pins(self.outputs)
-    
-    @output_mode.setter
-    def output_mode(self, pinmodes:list):
-        self._setmode_on_pins(self.outputs, pinmodes)
-        
-    
-    @property 
-    def inputs(self):
-        return self.list_port('in')
-    
-    @property 
-    def input_pins(self):
-        return self.list_port('pin_in')
-    
-    @property 
-    def input_byte(self):
-        if platform.IsRP2040:
-            return platform.read_input_byte()
-        
-        return self._read_byte(self.inputs)
-    
-    
-    @input_byte.setter 
-    def input_byte(self, val:int):
-        if platform.IsRP2040:
-            platform.write_input_byte(val)
-        else:
-            self._write_byte(self.inputs, val)
-        
-    
-    
-    @property 
-    def input_mode(self):
-        return self._getmode_for_pins(self.inputs)
-    
-    @input_mode.setter
-    def input_mode(self, pinmodes:list):
-        self._setmode_on_pins(self.inputs, pinmodes)
-    
-    
-    @property 
-    def bidirs(self):
-        return self.list_port('uio')
-    
-    @property 
-    def bidir_pins(self):
-        return self.list_port('pin_uio')
-        
-    @property 
-    def bidir_byte(self):
-        if platform.IsRP2040:
-            return platform.read_bidir_byte()
-        
-        return self._read_byte(self.bidirs)
-    
-    @bidir_byte.setter 
-    def bidir_byte(self, val:int):
-        if platform.IsRP2040:
-            platform.write_bidir_byte(val)
-        else:
-            self._write_byte(self.bidirs, val)
-    
-        
-    @property 
-    def bidir_mode(self):
-        return self._getmode_for_pins(self.bidirs)
-    
-    @bidir_mode.setter
-    def bidir_mode(self, pinmodes:list):
-        self._setmode_on_pins(self.bidirs, pinmodes)
-    
     def begin_inputs_all(self):
         
-        for name,gpio in GPIOMap.all().items():
+        log.debug(f'Begin inputs all with {gp.GPIOMap}')
+        always_out = gp.GPIOMap.always_outputs()
+        for name,gpio in gp.GPIOMap.all().items():
             if name == self.muxName:
                 continue
-            p = StandardPin(name, gpio, Pin.IN, pull=GPIOMap.default_pull(name))
+            p_type = Pin.IN
+            if always_out.count(name) > 0:
+                p_type = Pin.OUT
+            p = StandardPin(name, gpio, p_type, pull=gp.GPIOMap.default_pull(name))
             setattr(self, f'pin_{name}', p.raw_pin)
             setattr(self, name, p) # self._pinFunc(p)) 
             self._allpins[name] = p
@@ -295,7 +229,7 @@ class Pins:
             
         '''
         log.debug('Setting bidirs to safe mode (inputs)')
-        for pname in GPIOMap.all().keys():
+        for pname in gp.GPIOMap.all().keys():
             if pname.startswith('uio'):
                 p = getattr(self, pname)
                 p.mode = Pin.IN
@@ -314,8 +248,8 @@ class Pins:
         self.begin_inputs_all()
         self._begin_alwaysOut()
         unconfigured_pins = []
-        for pname in GPIOMap.all().keys():
-            if pname.startswith('in'):
+        for pname in gp.GPIOMap.all().keys():
+            if pname.startswith('ui_in'):
                 p = getattr(self, pname)
                 if self.dieOnInputControlSwitchHigh:
                     if p():
@@ -347,12 +281,12 @@ class Pins:
         self.begin_inputs_all()
         self._begin_alwaysOut()
         
-        for pname in GPIOMap.all().keys():
-            if pname.startswith('out'):
+        for pname in gp.GPIOMap.all().keys():
+            if pname.startswith('uo_out'):
                 p = getattr(self, pname)
                 p.mode = Pin.OUT
                 
-            if pname.startswith('in'):
+            if pname.startswith('ui_in'):
                 p = getattr(self, pname)
                 p.pull = Pin.PULL_DOWN
                 
@@ -367,16 +301,20 @@ class Pins:
                 p.mode = Pin.OUT
             else:
                 p.mode = Pin.IN
+                
             
     def _begin_alwaysOut(self):
-        for pname in GPIOMap.always_outputs():
+        for pname in gp.GPIOMap.always_outputs():
             p = getattr(self, pname)
             p.mode = Pin.OUT 
             
     def _begin_muxPins(self):
-        muxedPins = GPIOMap.muxed_pairs()
-        modeMap = GPIOMap.muxed_pinmode_map(self.mode)
+        if not gp.GPIOMap.demoboard_uses_mux():
+            return 
+        muxedPins = gp.GPIOMap.muxed_pairs()
+        modeMap = gp.GPIOMap.muxed_pinmode_map(self.mode)
         for pname, muxPair in muxedPins.items():
+            log.debug(f'Creating muxed pin {pname}')
             mp = MuxedPin(pname, self.muxCtrl, 
                           getattr(self, pname),
                           MuxedPinInfo(muxPair[0],
@@ -393,7 +331,7 @@ class Pins:
             
     # aliases
     @property 
-    def project_clk(self):
+    def clk(self):
         return self.rp_projclk
     
     @property 
@@ -413,7 +351,7 @@ class Pins:
     def dump(self):
         print(f'Pins configured in mode {RPMode.to_string(self.mode)}')
         print(f'Currently:')
-        for pname in sorted(GPIOMap.all().keys()):
+        for pname in sorted(gp.GPIOMap.all().keys()):
             self._dumpPin(getattr(self, pname))
     
     

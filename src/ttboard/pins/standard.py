@@ -11,7 +11,7 @@ from ttboard.pins.upython import Pin
 if IsRP2040:
     import machine
 
-import  ttboard.logging as logging
+import ttboard.log as logging
 log = logging.getLogger(__name__)
 
 class StandardPin:
@@ -105,13 +105,13 @@ class StandardPin:
             return None
         
         log.debug(f"Setting PWM on {self.name} to {freq}Hz")
-        if self._pwm is None:
-            if IsRP2040:
-                self._pwm = machine.PWM(self.raw_pin)
-            else:
-                log.warn('Not on RP2040--no PWM')
-                return None
         
+        if IsRP2040:
+            self._pwm = machine.PWM(self.raw_pin)
+        else:
+            log.warn('Not on RP2040--no PWM')
+            return None
+    
         if freq is not None and freq > 0:
                 self._pwm.freq(int(freq))
             
@@ -129,7 +129,7 @@ class StandardPin:
     def __getattr__(self, name):
         if hasattr(self.raw_pin, name):
             return getattr(self.raw_pin, name)
-        raise AttributeError
+        raise AttributeError(f'no attr {name}')
     
     def __repr__(self):
         outval = ''
