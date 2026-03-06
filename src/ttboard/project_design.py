@@ -184,6 +184,8 @@ class Design(Serializable):
         self.commit = ''
         self.clock_hz = -1
         self._all = info
+        self.repo_name = ''
+        self.repo_user = ''
         if info is None:
             return 
         
@@ -196,6 +198,10 @@ class Design(Serializable):
         
         if 'repo' in info:
             self.repo = info['repo']
+            repo_parts = self.repo.split('/')
+            if len(repo_parts) >= 2:
+                self.repo_name = str(repo_parts[-1])
+                self.repo_user = str(repo_parts[-2])
             
         if 'commit' in info:
             self.commit = info['commit']
@@ -221,6 +227,23 @@ class Design(Serializable):
         
     def disable(self):
         self.mux.disable()
+    
+    def run_test(self):
+        from os import listdir
+        try:
+            log.info(f'Attempting to Test: {self.name}')
+            self.enable()
+            test_files = listdir(f'/{self.repo_user}_{self.repo_name}')
+            for test_file in test_files:
+                log.info(f'Running test file {test_file}')
+                with open(f'/{self.repo_user}_{self.repo_name}/{test_file}') as fh:
+                    try:
+                        exec(fh.read())
+                    except:
+                        log.info(f'Error running test file {test_file}')
+            log.info(f'Test complete for: {self.name}\n')
+        except:
+            log.info(f'Was Unable to Test: {self.name}')
         
     def serialize(self):
         payload_data = [

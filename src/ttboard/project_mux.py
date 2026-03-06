@@ -15,8 +15,6 @@ import json
 import re 
 import gc
 import os
-from re import compile as re_compile
-from os import stat, listdir
 import ttboard.util.time as time
 from ttboard.pins.pins import Pins
 from ttboard.boot.rom import ChipROM
@@ -55,42 +53,6 @@ class DesignIndex(Serializable):
         except OSError:
             return None 
         
-        self._all = info
-
-        repo_parts = self.repo.split('/')
-
-        self.repo_name = str(repo_parts[-1])
-        self.repo_user = str(repo_parts[-2])
-
-        
-    def run_test(self):
-            try:
-                log.info(f'Attempting to Test: {self.name}')
-                self.enable()
-                # test_folder = f'/{self.repo_user}_{self.repo_name}'
-                
-                # # Get the files in the test folder
-                # # Run each file consecutively
-                test_files = listdir(f'/{self.repo_user}_{self.repo_name}')
-                for test_file in test_files:
-                    log.info(f'Running test file {test_file}')
-
-                    with open(f'/{self.repo_user}_{self.repo_name}/{test_file}') as fh:
-                        try:
-                            exec(fh.read())
-                        except:
-                            log.info(f'Error running test file {test_file}')
-
-                log.info(f'Test complete for: {self.name}\n')
-            except:
-                log.info(f'Was Unable to Test: {self.name}')
-
-
-    def enable(self):
-        self.mux.enable(self)
-        
-    def disable(self):
-        self.mux.disable()
         return serialized_fpath
         
     def load_serialized(self, serialized_fpath):
@@ -143,7 +105,7 @@ class DesignIndex(Serializable):
                 name = f'wokwi_{new_name}_{name[-3:]}'
         
         return name 
-             
+
     def test_all(self):
         """
         Go through all designs and run their tests,
