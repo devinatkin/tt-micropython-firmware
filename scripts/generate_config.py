@@ -2,6 +2,7 @@ import os
 import sys
 import json
 from github import Github
+from github.GithubException import UnknownObjectException, GithubException
 import shutil
 
 def main():
@@ -50,8 +51,9 @@ def main():
                     userName = splitRepo[-2]
                     repoName = splitRepo[-1]
                     print(f'{userName} {repoName}')
-                    repo = g.get_repo(f'{userName}/{repoName}')
+
                     try:
+                        repo = g.get_repo(f'{userName}/{repoName}')
                         contents = repo.get_contents('tb/commander')
                         while contents:
                             file_content = contents.pop(0)
@@ -72,7 +74,14 @@ def main():
                                     with open(os.path.join(proj_tests_dir, file_content.name), 'wb') as f:
                                         f.write(file_content.decoded_content)
 
-                    except:
+                    except UnknownObjectException:
+                        print(f"Skipping missing repo or path for {userName}/{repoName}")
+                        print(f"No Test found for {userName}/{repoName}")
+                    except GithubException as e:
+                        print(f"GitHub API error for {userName}/{repoName}: {e}")
+                        print(f"No Test found for {userName}/{repoName}")
+                    except Exception as e:
+                        print(f"Unexpected error for {userName}/{repoName}: {e}")
                         print(f"No Test found for {userName}/{repoName}")
 
         
