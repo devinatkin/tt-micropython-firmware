@@ -94,12 +94,10 @@ jobs:
            cp -r $GITHUB_WORKSPACE/sdk/microcotb/src/microcotb $GITHUB_WORKSPACE/sdk/src
     
     - name: Get shuttle indices
-
-    # build it
-    - name: get the os
       run: |
            mkdir $GITHUB_WORKSPACE/sdk/src/shuttles
            for chip in $TT_RUNS_SUPPORTED; do wget -O $GITHUB_WORKSPACE/sdk/src/shuttles/$chip.json "https://index.tinytapeout.com/$chip.json?fields=repo,address,commit,clock_hz,title,danger_level"; done
+
     - name: Prepare shuttle bin files
       run: |
            cp -R $GITHUB_WORKSPACE/sdk/src $GITHUB_WORKSPACE/sdk/convwork
