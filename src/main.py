@@ -51,7 +51,7 @@ def startup():
     # construct DemoBoard
     # either pass an appropriate RPMode, e.g. RPMode.ASIC_RP_CONTROL
     # or have "mode = ASIC_RP_CONTROL" in ini DEFAULT section
-    ttdemoboard = DemoBoard.get()
+    ttdemoboard = DemoBoard()
     print("\n\n")
     print(f"The '{colors.color('tt', 'red')}' object is available.")
     print()
