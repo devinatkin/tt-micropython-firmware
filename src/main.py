@@ -8,9 +8,8 @@ you might want to have access to when connecting to the REPL.
 
 If you want to use the SDK, all
 you really need is something like
-      
-      DemoboardDetect.probe()
-      tt = DemoBoard.get()
+  
+      tt = DemoBoard()
 
 Then you can 
     # enable test project
