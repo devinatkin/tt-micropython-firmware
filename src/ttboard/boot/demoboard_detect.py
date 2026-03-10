@@ -129,6 +129,7 @@ class DemoboardDetect:
             log.info("DB seems to have on-board MUX: TT04+")
             cls.PCB = DemoboardVersion.TT04
             cls.CarrierVersion = DemoboardCarrier.TT_CARRIER
+            cls.CarrierPresent = True
             return True
         
         log.debug("Mux twiddle has no effect, probably not TT04 db")
