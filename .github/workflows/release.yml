@@ -52,7 +52,6 @@ jobs:
  
   create-release:
     needs: generate-config
-    # ubuntu
     env:
       RPOS_UF2FILE: RPI_PICO-20241025-v1.24.0.uf2
       TT_RUNS_SUPPORTED: "unknown tt04 tt05 tt06 tt07 tt08"
@@ -77,7 +76,6 @@ jobs:
         name: Compiled_Test_Artifact
         path: sdk/src
 
-    # get the RPI UF2
     - name: Download stock MicroPython UF2
       run: wget -O /tmp/rp2-pico.uf2 "https://micropython.org/resources/firmware/$RPOS_UF2FILE"
     
@@ -130,6 +128,7 @@ jobs:
            RUNPATH="$GITHUB_WORKSPACE/sdk/convwork:$PYTHONPATH"
            cd $GITHUB_WORKSPACE/sdk/test
            for chip in $TT_RUNS_SUPPORTED; do PYTHONPATH=$RUNPATH pytest --shuttle $chip --shuttlepath $GITHUB_WORKSPACE/sdk/src/shuttles test_serialized_shuttle.py; done
+      
            
     - name: Build the final UF2
       run: |

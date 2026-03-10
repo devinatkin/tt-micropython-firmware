@@ -64,6 +64,7 @@ def main():
                                     print(f'Config found for {userName}/{repoName}')
                                     content = file_content.decoded_content.decode('utf-8')
                                     config_file.write(content)
+                                    config_file.write('\n\n')
                                     config_file.flush()
                                 
                                 # All other files are tests
