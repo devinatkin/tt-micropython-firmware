@@ -232,6 +232,9 @@ class Design(Serializable):
     def run_test(self):
         from os import listdir
         try:
+            if not self.repo_user or not self.repo_name:
+                log.info(f'No repo info for {self.name}, skipping test')
+                return
             test_dir = f'/{self.repo_user}_{self.repo_name}'
             test_files = listdir(test_dir)
 
@@ -257,8 +260,9 @@ class Design(Serializable):
         payload_data = [
                 self.name,
                 self.danger_level,
-                [self.clock_hz, self.SerializeClockBytes]
-                
+                [self.clock_hz, self.SerializeClockBytes],
+                self.repo,
+                self.commit
             ]
         
         payload_bytes = self.serialize_list(payload_data)
@@ -278,7 +282,15 @@ class Design(Serializable):
         self.macro = self.name
         self.danger_level = self.deserialize_int(bytestream, 1)
         self.clock_hz = self.deserialize_int(bytestream, self.SerializeClockBytes)
-        
+        self.repo = self.deserialize_string(bytestream)
+        self.commit = self.deserialize_string(bytestream)
+
+        if self.repo:
+            repo_parts = self.repo.split('/')
+            if len(repo_parts) >= 2:
+                self.repo_name = str(repo_parts[-1])
+                self.repo_user = str(repo_parts[-2])
+
     def __str__(self):
         return f'{self.name} ({self.count}) @ {self.repo}'
     
