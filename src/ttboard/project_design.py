@@ -231,19 +231,25 @@ class Design(Serializable):
     def run_test(self):
         from os import listdir
         try:
+            test_files = listdir(f'/{self.repo_user}_{self.repo_name}')
+
+            if len(test_files) == 0:
+                log.info(f'No test files found for: {self.name} at /{self.repo_user}_{self.repo_name}')
+                return
+            
             log.info(f'Attempting to Test: {self.name}')
             self.enable()
-            test_files = listdir(f'/{self.repo_user}_{self.repo_name}')
+            
             for test_file in test_files:
                 log.info(f'Running test file {test_file}')
                 with open(f'/{self.repo_user}_{self.repo_name}/{test_file}') as fh:
                     try:
                         exec(fh.read())
-                    except:
-                        log.info(f'Error running test file {test_file}')
+                    except Exception as e:
+                        log.info(f'Error running test file {test_file}: {e}')
             log.info(f'Test complete for: {self.name}\n')
-        except:
-            log.info(f'Was Unable to Test: {self.name}')
+        except Exception as e:
+            log.info(f'Was Unable to Test: {self.name} due to {e}')
         
     def serialize(self):
         payload_data = [
