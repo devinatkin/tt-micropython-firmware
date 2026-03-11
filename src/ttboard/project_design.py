@@ -202,7 +202,8 @@ class Design(Serializable):
             if len(repo_parts) >= 2:
                 self.repo_name = str(repo_parts[-1])
                 self.repo_user = str(repo_parts[-2])
-            
+        else:
+            log.info(f'No repo specified for {self.name}')
         if 'commit' in info:
             self.commit = info['commit']
         self.clock_hz = int(info['clock_hz'])
@@ -231,10 +232,11 @@ class Design(Serializable):
     def run_test(self):
         from os import listdir
         try:
-            test_files = listdir(f'/{self.repo_user}_{self.repo_name}')
+            test_dir = f'/{self.repo_user}_{self.repo_name}'
+            test_files = listdir(test_dir)
 
             if len(test_files) == 0:
-                log.info(f'No test files found for: {self.name} at /{self.repo_user}_{self.repo_name}')
+                log.info(f'No test files found for: {self.name} at {test_dir}')
                 return
             
             log.info(f'Attempting to Test: {self.name}')
@@ -242,14 +244,14 @@ class Design(Serializable):
             
             for test_file in test_files:
                 log.info(f'Running test file {test_file}')
-                with open(f'/{self.repo_user}_{self.repo_name}/{test_file}') as fh:
+                with open(f'{test_dir}/{test_file}') as fh:
                     try:
                         exec(fh.read())
                     except Exception as e:
                         log.info(f'Error running test file {test_file}: {e}')
             log.info(f'Test complete for: {self.name}\n')
         except Exception as e:
-            log.info(f'Was Unable to Test: {self.name} due to {e}')
+            log.info(f'Was Unable to Test: {self.name} due to {e} (test_dir={test_dir})')       
         
     def serialize(self):
         payload_data = [
